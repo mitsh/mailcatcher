@@ -1,10 +1,27 @@
+# Apparently rubygems won't activate these on its own, so here we go. Let's
+# repeat the invention of Bundler all over again.
+gem "eventmachine", "1.0.9.1"
+gem "mail", "~> 2.3"
+gem "rack", "~> 1.5"
+gem "sinatra", "~> 1.2"
+gem "sqlite3", "~> 1.3"
+gem "thin", "~> 1.5.0"
+gem "skinny", "~> 0.2.3"
+
 require "open3"
 require "optparse"
 require "rbconfig"
 
-require "active_support"
 require "eventmachine"
 require "thin"
+
+module EventMachine
+  # Monkey patch fix for 10deb4
+  # See https://github.com/eventmachine/eventmachine/issues/569
+  def self.reactor_running?
+    (@reactor_running || false)
+  end
+end
 
 require "mail_catcher/events"
 require "mail_catcher/mail"
@@ -13,9 +30,9 @@ require "mail_catcher/web"
 require "mail_catcher/version"
 
 module MailCatcher extend self
-  def which(command)
-    not windows? and Open3.popen3 'which', 'command' do |stdin, stdout, stderr|
-      return stdout.read.chomp.presence
+  def which?(command)
+    ENV["PATH"].split(File::PATH_SEPARATOR).any? do |directory|
+      File.executable?(File.join(directory, command.to_s))
     end
   end
 
@@ -31,16 +48,27 @@ module MailCatcher extend self
     mac? and const_defined? :MACRUBY_VERSION
   end
 
-  def browse?
-    windows? or which "open"
+  def browseable?
+    windows? or which? "open"
   end
 
   def browse url
     if windows?
       system "start", "/b", url
-    elsif which "open"
+    elsif which? "open"
       system "open", url
     end
+  end
+
+  def log_exception(message, context, exception)
+    gems_paths = (Gem.path | [Gem.default_dir]).map { |path| Regexp.escape(path) }
+    gems_regexp = %r{(?:#{gems_paths.join('|')})/gems/([^/]+)-([\w.]+)/(.*)}
+    gems_replace = '\1 (\2) \3'
+
+    puts "*** #{message}: #{context.inspect}"
+    puts "    Exception: #{exception}"
+    puts "    Backtrace:", *exception.backtrace.map { |line| "       #{line.sub(gems_regexp, gems_replace)}" }
+    puts "    Please submit this as an issue at http://github.com/sj26/mailcatcher/issues"
   end
 
   @@defaults = {
@@ -105,7 +133,7 @@ module MailCatcher extend self
           end
         end
 
-        if browse?
+        if browseable?
           parser.on('-b', '--browse', 'Open web browser') do
             options[:browse] = true
           end
@@ -125,7 +153,7 @@ module MailCatcher extend self
 
   def run! options=nil
     # If we are passed options, fill in the blanks
-    options &&= options.reverse_merge @@defaults
+    options &&= @@defaults.merge options
     # Otherwise, parse them from ARGV
     options ||= parse!
 
@@ -143,9 +171,6 @@ module MailCatcher extend self
 
     # One EventMachine loop...
     EventMachine.run do
-      smtp_url = "smtp://#{options[:smtp_ip]}:#{options[:smtp_port]}"
-      http_url = "http://#{options[:http_ip]}:#{options[:http_port]}"
-
       # Set up an SMTP server to run within EventMachine
       rescue_port options[:smtp_port] do
         EventMachine.start_server options[:smtp_ip], options[:smtp_port], Smtp
@@ -186,6 +211,14 @@ module MailCatcher extend self
 
 protected
 
+  def smtp_url
+    "smtp://#{@@options[:smtp_ip]}:#{@@options[:smtp_port]}"
+  end
+
+  def http_url
+    "http://#{@@options[:http_ip]}:#{@@options[:http_port]}"
+  end
+
   def rescue_port port
     begin
       yield
@@ -194,6 +227,8 @@ protected
     rescue RuntimeError
       if $!.to_s =~ /\bno acceptor\b/
         puts "~~> ERROR: Something's using port #{port}. Are you already running MailCatcher?"
+        puts "==> #{smtp_url}"
+        puts "==> #{http_url}"
         exit -1
       else
         raise

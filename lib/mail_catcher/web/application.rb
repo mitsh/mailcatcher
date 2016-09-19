@@ -17,7 +17,6 @@ module MailCatcher
     class Application < Sinatra::Base
       set :development, ENV["MAILCATCHER_ENV"] == "development"
       set :root, File.expand_path("#{__FILE__}/../../../..")
-      set :haml, :format => :html5
 
       if development?
         require "sprockets-helpers"
@@ -25,7 +24,7 @@ module MailCatcher
         configure do
           require "mail_catcher/web/assets"
           Sprockets::Helpers.configure do |config|
-            config.environment = MailCatcher::Web::Assets
+            config.environment = Assets
             config.prefix      = "/assets"
             config.digest      = false
             config.public_path = public_folder
@@ -49,7 +48,7 @@ module MailCatcher
       end
 
       get "/" do
-        haml :index
+        erb :index
       end
 
       delete "/" do
@@ -65,13 +64,21 @@ module MailCatcher
         if request.websocket?
           request.websocket!(
             :on_start => proc do |websocket|
-              subscription = Events::MessageAdded.subscribe { |message| websocket.send_message message.to_json }
-              websocket.on_close do |websocket|
+              subscription = Events::MessageAdded.subscribe do |message|
+                begin
+                  websocket.send_message(JSON.generate(message))
+                rescue => exception
+                  MailCatcher.log_exception("Error sending message through websocket", message, exception)
+                end
+              end
+
+              websocket.on_close do |*|
                 Events::MessageAdded.unsubscribe subscription
               end
             end)
         else
-          Mail.messages.to_json
+          content_type :json
+          JSON.generate(Mail.messages)
         end
       end
 
@@ -83,7 +90,8 @@ module MailCatcher
       get "/messages/:id.json" do
         id = params[:id].to_i
         if message = Mail.message(id)
-          message.merge({
+          content_type :json
+          JSON.generate(message.merge({
             "formats" => [
               "source",
               ("html" if Mail.message_has_html? id),
@@ -92,7 +100,7 @@ module MailCatcher
             "attachments" => Mail.message_attachments(id).map do |attachment|
               attachment.merge({"href" => "/messages/#{escape(id)}/parts/#{escape(attachment["cid"])}"})
             end,
-          }).to_json
+          }))
         else
           not_found
         end
@@ -101,7 +109,7 @@ module MailCatcher
       get "/messages/:id.html" do
         id = params[:id].to_i
         if part = Mail.message_part_html(id)
-          content_type part["type"], :charset => (part["charset"] || "utf8")
+          content_type :html, :charset => (part["charset"] || "utf8")
 
           body = part["body"]
 
@@ -155,23 +163,10 @@ module MailCatcher
         end
       end
 
-      get "/messages/:id/analysis.?:format?" do
-        id = params[:id].to_i
-        if part = Mail.message_part_html(id)
-          # TODO: Server-side cache? Make the browser cache based on message create time? Hmm.
-          uri = URI.parse("http://api.getfractal.com/api/v2/validate#{"/format/#{params[:format]}" if params[:format].present?}")
-          response = Net::HTTP.post_form(uri, :api_key => "5c463877265251386f516f7428", :html => part["body"])
-          content_type ".#{params[:format]}" if params[:format].present?
-          body response.body
-        else
-          not_found
-        end
-      end
-
       delete "/messages/:id" do
         id = params[:id].to_i
-        if message = Mail.message(id)
-          MailCatcher::Mail.delete_message!(id)
+        if Mail.message(id)
+          Mail.delete_message!(id)
           status 204
         else
           not_found
@@ -179,7 +174,7 @@ module MailCatcher
       end
 
       not_found do
-        haml :"404"
+        erb :"404"
       end
     end
   end

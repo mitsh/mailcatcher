@@ -4,7 +4,7 @@ Catches mail and serves it through a dream.
 
 MailCatcher runs a super simple SMTP server which catches any message sent to it to display in a web interface. Run mailcatcher, set your favourite app to deliver to smtp://127.0.0.1:1025 instead of your default SMTP server, then check out http://127.0.0.1:1080 to see the mail that's arrived so far.
 
-![MailCatcher screenshot](http://f.cl.ly/items/3w2T1p0F3g003b2i1F2z/Screen%20shot%202011-06-23%20at%2011.39.03%20PM.png)
+![MailCatcher screenshot](https://cloud.githubusercontent.com/assets/14028/14093249/4100f904-f598-11e5-936b-e6a396f18e39.png)
 
 ## Features
 
@@ -24,8 +24,8 @@ MailCatcher runs a super simple SMTP server which catches any message sent to it
 
 1. `gem install mailcatcher`
 2. `mailcatcher`
-3. Go to http://localhost:1080/
-4. Send mail through smtp://localhost:1025
+3. Go to http://127.0.0.1:1080/
+4. Send mail through smtp://127.0.0.1:1025
 
 Use `mailcatcher --help` to see the command line options. The brave can get the source from [the GitHub repository][mailcatcher-github].
 
@@ -47,7 +47,8 @@ Under RVM your mailcatcher command may only be available under the ruby you inst
 To set up your rails app, I recommend adding this to your `environments/development.rb`:
 
     config.action_mailer.delivery_method = :smtp
-    config.action_mailer.smtp_settings = { :address => "localhost", :port => 1025 }
+    config.action_mailer.smtp_settings = { :address => '127.0.0.1', :port => 1025 }
+    config.action_mailer.raise_delivery_errors = false
 
 ### PHP
 
@@ -55,9 +56,9 @@ For projects using PHP, or PHP frameworks and application platforms like Drupal,
 
     sendmail_path = /usr/bin/env catchmail -f some@from.address
 
-You can do this in an [Apache htaccess file](http://php.net/manual/en/configuration.changes.php) or general configuration like so:
+You can do this in your [Apache configuration](http://php.net/manual/en/configuration.changes.php) like so:
 
-    php_value sendmail_path "/usr/bin/env catchmail -f some@from.address"
+    php_admin_value sendmail_path "/usr/bin/env catchmail -f some@from.address"
 
 If you've installed via RVM this probably won't work unless you've manually added your RVM bin paths to your system environment's PATH. In that case, run `which catchmail` and put that path into the `sendmail_path` directive above instead of `/usr/bin/env catchmail`.
 
@@ -90,11 +91,8 @@ A fairly RESTful URL schema means you can download a list of messages in JSON fr
 ## TODO
 
 * Add mail delivery on request, optionally multiple times.
-* An API-compatible nodejs version, for fun and profit (and non-ruby npm users).
-* Test suite.
 * Compatibility testing against CampaignMonitor's [design guidelines](http://www.campaignmonitor.com/design-guidelines/) and [CSS support matrix](http://www.campaignmonitor.com/css/).
 * Forward mail to rendering service, maybe CampaignMonitor?
-* Package as an app? Native interfaces? HotCocoa?
 
 ## Thanks
 

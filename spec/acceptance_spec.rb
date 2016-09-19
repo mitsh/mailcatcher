@@ -45,12 +45,10 @@ describe MailCatcher do
   end
 
   def selenium
-    @selenium ||= begin
-      Selenium::WebDriver.for(:phantomjs).tap do |selenium|
-        selenium.navigate.to("http://127.0.0.1:#{HTTP_PORT}")
-      end
-    end
+    @selenium ||= Selenium::WebDriver.for(:phantomjs)
   end
+
+  before { selenium.navigate.to("http://127.0.0.1:#{HTTP_PORT}") }
 
   def messages_element
     selenium.find_element(:id, "messages")
@@ -96,8 +94,6 @@ describe MailCatcher do
     selenium.find_element(:tag_name, "body")
   end
 
-  before { selenium.navigate.refresh }
-
   it "catches and displays a plain text message as plain text and source" do
     deliver_example("plainmail")
 
@@ -115,7 +111,7 @@ describe MailCatcher do
     plain_tab_element.click
 
     iframe_element.displayed?.must_equal true
-    iframe_element.attribute(:src).must_match /\.plain\Z/
+    iframe_element.attribute(:src).must_match(/\.plain\Z/)
 
     selenium.switch_to.frame(iframe_element)
 

@@ -1,4 +1,4 @@
-require File.expand_path('../lib/mail_catcher/version', __FILE__)
+require File.expand_path("../lib/mail_catcher/version", __FILE__)
 
 Gem::Specification.new do |s|
   s.name = "mailcatcher"
@@ -28,12 +28,11 @@ Gem::Specification.new do |s|
   s.executables = ["mailcatcher", "catchmail"]
   s.extra_rdoc_files = ["README.md", "LICENSE"]
 
-  s.required_ruby_version = '>= 1.8.7'
+  s.required_ruby_version = ">= 1.9.3"
 
-  s.add_dependency "activesupport", ">= 4.0.0", "< 5"
-  s.add_dependency "eventmachine", "~> 1.0.0"
-  s.add_dependency "haml", ">= 3.1", "< 4.1"
+  s.add_dependency "eventmachine", "1.0.9.1"
   s.add_dependency "mail", "~> 2.3"
+  s.add_dependency "rack", "~> 1.5"
   s.add_dependency "sinatra", "~> 1.2"
   s.add_dependency "sqlite3", "~> 1.3"
   s.add_dependency "thin", "~> 1.5.0"

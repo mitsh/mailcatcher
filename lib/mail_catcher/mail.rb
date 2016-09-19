@@ -1,5 +1,5 @@
-require "active_support/json"
 require "eventmachine"
+require "json"
 require "mail"
 require "sqlite3"
 
@@ -41,7 +41,7 @@ module MailCatcher::Mail extend self
     @add_message_query ||= db.prepare("INSERT INTO message (sender, recipients, subject, source, type, size, created_at) VALUES (?, ?, ?, ?, ?, ?, datetime('now'))")
 
     mail = Mail.new(message[:source])
-    @add_message_query.execute(message[:sender], message[:recipients].to_json, mail.subject, message[:source], mail.mime_type || "text/plain", message[:source].length)
+    @add_message_query.execute(message[:sender], JSON.generate(message[:recipients]), mail.subject, message[:source], mail.mime_type || "text/plain", message[:source].length)
     message_id = db.last_insert_row_id
     parts = mail.all_parts
     parts = [mail] if parts.empty?
@@ -69,10 +69,10 @@ module MailCatcher::Mail extend self
   end
 
   def messages
-    @messages_query ||= db.prepare "SELECT id, sender, recipients, subject, size, created_at FROM message ORDER BY created_at ASC"
+    @messages_query ||= db.prepare "SELECT id, sender, recipients, subject, size, created_at FROM message ORDER BY created_at, id ASC"
     @messages_query.execute.map do |row|
       Hash[row.fields.zip(row)].tap do |message|
-        message["recipients"] &&= ActiveSupport::JSON.decode message["recipients"]
+        message["recipients"] &&= JSON.parse(message["recipients"])
       end
     end
   end
@@ -81,7 +81,7 @@ module MailCatcher::Mail extend self
     @message_query ||= db.prepare "SELECT * FROM message WHERE id = ? LIMIT 1"
     row = @message_query.execute(id).next
     row && Hash[row.fields.zip(row)].tap do |message|
-      message["recipients"] &&= ActiveSupport::JSON.decode message["recipients"]
+      message["recipients"] &&= JSON.parse(message["recipients"])
     end
   end
 
@@ -126,7 +126,7 @@ module MailCatcher::Mail extend self
     part ||= message_part_type(message_id, "application/xhtml+xml")
     part ||= begin
       message = message(message_id)
-      message if message.present? and ["text/html", "application/xhtml+xml"].include? message["type"]
+      message if message and ["text/html", "application/xhtml+xml"].include? message["type"]
     end
   end
 
@@ -144,11 +144,11 @@ module MailCatcher::Mail extend self
   end
 
   def delete!
-    @delete_messages_query ||= db.prepare "DELETE FROM message"
-    @delete_message_parts_query ||= db.prepare "DELETE FROM message_part"
+    @delete_all_messages_query ||= db.prepare "DELETE FROM message"
+    @delete_all_message_parts_query ||= db.prepare "DELETE FROM message_part"
 
-    @delete_messages_query.execute and
-    @delete_message_parts_query.execute
+    @delete_all_messages_query.execute and
+    @delete_all_message_parts_query.execute
   end
 
   def delete_message!(message_id)
